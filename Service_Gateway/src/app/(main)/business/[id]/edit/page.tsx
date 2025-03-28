@@ -7,8 +7,18 @@ import Link from 'next/link';
 interface BusinessForm {
   id: number;
   name: string;
+  status: string;
+  node_cnt: number;
+  core_cnt: number;
   issued: string;
   expired: string;
+  manager_id: string;
+}
+
+interface Manager {
+  id: number;
+  username: string;
+  company: string;
 }
 
 export default function BusinessEditPage() {
@@ -17,9 +27,11 @@ export default function BusinessEditPage() {
   const [formData, setFormData] = useState<BusinessForm | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [managers, setManagers] = useState<Manager[]>([]);
 
   useEffect(() => {
     fetchBusinessDetail();
+    fetchManagers();
   }, []);
 
   const fetchBusinessDetail = async () => {
@@ -36,6 +48,24 @@ export default function BusinessEditPage() {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchManagers = async () => {
+    try {
+      let url = `/api/user?manager=true`;
+
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (!result.success) {
+        // alert(result.message);
+        return;
+      }
+
+      setManagers(result.data);
+    } catch (error) {
+      alert('사업담당자 목록 조회에 실패했습니다.');
     }
   };
 
@@ -109,6 +139,69 @@ export default function BusinessEditPage() {
                 onChange={handleChange}
                 className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                사업 담당자
+              </label>
+              <select
+                name="manager_id"
+                value={formData.manager_id}
+                onChange={handleChange}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">선택하세요</option>
+                {managers.map(item => (
+                  <option key={item.id} value={item.id.toString()}>
+                    {item.username} ({item.company})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                사업 상태
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="standby">대기 중</option>
+                <option value="meeting">고객 미팅</option>
+                <option value="poc">PoC</option>
+                <option value="bmt">BMT</option>
+                <option value="ordering">발주</option>
+                <option value="proposal">제안</option>
+                <option value="ordersuccess">수주 성공</option>
+                <option value="cancel">취소</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                노드수
+              </label>
+              <input
+                type="number"
+                name="node_cnt"
+                value={formData.node_cnt}
+                onChange={handleChange}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                코어수
+              </label>
+              <input
+                type="number"
+                name="core_cnt"
+                value={formData.core_cnt}
+                onChange={handleChange}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>

@@ -33,51 +33,9 @@ export class License {
 
   @Column({
     type: 'int',
-    default: 0,
-    nullable: true
-  })
-  cpu_core: number;
-
-  @Column({
-    type: 'int',
-    default: 1,
-    nullable: true
-  })
-  product_cnt: number;
-
-  @Column({
-    type: 'enum',
-    enum: ['POC', 'BMT', 'TEMP'],
-    nullable: true
-  })
-  business_type: 'POC' | 'BMT' | 'TEMP';
-
-  @Column({
-    type: 'varchar',
-    length: 100,
-    nullable: true
-  })
-  business_name: string;
-
-  @Column({
-    type: 'varchar',
-    length: 50,
-    nullable: true
-  })
-  user_type: string;
-
-  @Column({
-    type: 'int',
     nullable: true
   })
   company_id: number;
-
-  @Column({
-    type: 'varchar',
-    length: 50,
-    nullable: true
-  })
-  issued_user: string;
 
   @Column({
     type: 'varchar',
@@ -96,7 +54,14 @@ export class License {
     type: 'int',
     nullable: true
   })
-  partner_id: number;
+  business_id: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true
+  })
+  issued_id: string;
 
   @CreateDateColumn()
   created: string
