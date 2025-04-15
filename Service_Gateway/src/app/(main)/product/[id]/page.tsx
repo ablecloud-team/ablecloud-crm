@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getCookie } from '../../../store/authStore';
 import { format } from 'date-fns';
 
@@ -17,6 +17,8 @@ interface Product {
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prevPage = searchParams.get('page') || '1';
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,11 +64,10 @@ export default function ProductDetailPage() {
 
       if (response.ok) {
         alert('제품이 삭제되었습니다.');
+        router.push(`/product?page=${prevPage}`);
       } else {
         throw new Error('제품 삭제에 실패했습니다.');
       }
-
-      router.push('/product');
     } catch (err) {
       alert(err instanceof Error ? err.message : '오류가 발생했습니다.');
     }
@@ -102,7 +103,7 @@ export default function ProductDetailPage() {
         <h1 className="text-2xl font-bold text-gray-800">제품 상세정보</h1>
         <div className="space-x-2">
           <button
-            onClick={() => window.location.href = `/product/${product.id}/edit`}
+            onClick={() => router.push(`/product/${product.id}/edit?page=${prevPage}`)}
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
             style={{ display: role === 'Admin' ? '' : 'none' }}
           >
@@ -116,7 +117,7 @@ export default function ProductDetailPage() {
             삭제
           </button>
           <button
-            onClick={() => window.location.href = `/product`}
+            onClick={() => router.push(`/product?page=${prevPage}`)}
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
           >
             목록
