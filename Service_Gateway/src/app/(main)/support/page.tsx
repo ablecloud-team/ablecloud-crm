@@ -4,20 +4,23 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getCookie, logoutIfTokenExpired } from '../../store/authStore';
 import Link from 'next/link';
+import { format } from 'date-fns';
 
-interface Business {
+interface Support {
   id: number;
-  name: string;
+  customer_id: string;
+  customer: string;
+  business_id: string;
+  business: string;
   issued: string;
-  expired: string;
-  customer_name: string;
+  type: string;
+  issue: string;
+  solution: string;
+  actioned: string;
+  action_type: string;
+  manager: string;
   status: string;
-  node_cnt: string;
-  core_cnt: string;
-  manager_name: string;
-  manager_company: string;
-  product_name: string;
-  product_version: string;
+  note: string;
 }
 
 interface Pagination {
@@ -27,19 +30,8 @@ interface Pagination {
   itemsPerPage: number;
 }
 
-const statusMap: Record<string, string> = {
-  standby: '대기 중',
-  meeting: '고객 미팅',
-  poc: 'PoC',
-  bmt: 'BMT',
-  ordering: '발주',
-  proposal: '제안',
-  ordersuccess: '수주 성공',
-  cancel: '취소',
-};
-
-export default function BusinessPage() {
-  const [businesses, setBusiness] = useState<Business[]>([]);
+export default function SupportPage() {
+  const [supports, setSupports] = useState<Support[]>([]);
   const [name, setName] = useState('');
   const [pagination, setPagination] = useState<Pagination>({
     currentPage: 1,
@@ -47,10 +39,11 @@ export default function BusinessPage() {
     totalItems: 0,
     itemsPerPage: 10
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasNextPage, setHasNextPage] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [role, setRole] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const role = getCookie('role');
@@ -62,19 +55,20 @@ export default function BusinessPage() {
       setName(currentName);
     }
 
-    const fetchBusiness = async () => {
+    const fetchSupports = async () => {
       try {
         const page = Number(searchParams.get('page')) || 1;
         const currentName = searchParams.get('name');
-  
-        let url = `/api/business?page=${page}&limit=${pagination.itemsPerPage}`;
+        
+        let url = `/api/support?page=${page}&limit=${pagination.itemsPerPage}`;
         if (currentName) {
           url += `&name=${currentName}`;
         }
+        
         if (role === 'User') {
           url += `&role=User`;
         }
-  
+
         const response = await fetch(url);
         const result = await response.json();
   
@@ -82,28 +76,28 @@ export default function BusinessPage() {
           throw new Error(result.message || '오류가 발생했습니다.');
         }
   
-        setBusiness(result.data);
+        setSupports(result.data);
         setPagination(prev => ({
           ...prev,
           totalItems: result.pagination.totalItems,
           totalPages: result.pagination.totalPages,
           currentPage: result.pagination.currentPage,
         }));
-        
-      } catch (err) {
-        if (err instanceof Error) {
-          if (err.message == 'Failed to fetch user information') {
-            logoutIfTokenExpired(); // 토큰 만료시 로그아웃
-          }
-        } else {
-          alert('사업 목록 조회에 실패했습니다.');
+  
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.message == 'Failed to fetch user information') {
+          logoutIfTokenExpired(); // 토큰 만료시 로그아웃
+        }
+      } else {
+          alert('기술지원 목록 조회에 실패했습니다.');
         }
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchBusiness();
+    fetchSupports();
   }, [searchParams.get('page'), searchParams.get('name'), pagination.itemsPerPage]);
 
   // 검색 버튼 클릭 핸들러
@@ -114,7 +108,8 @@ export default function BusinessPage() {
         params.set('name', name.trim());
       }
       params.set('page', '1');
-      router.push(`/business?${params.toString()}`);
+
+      router.push(`/support?${params.toString()}`);
     } catch (error) {
       alert(error);
     }
@@ -123,27 +118,25 @@ export default function BusinessPage() {
   // 초기화 버튼 클릭 핸들러
   const handleResetClick = () => {
     setName('');
-    router.push('/business?page=1');
+    router.push('/support?page=1');
   };
 
   // 페이지 변경 핸들러
   const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > pagination.totalPages) return;
-    
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams);
     params.set('page', newPage.toString());
-    router.push(`/business?${params.toString()}`);
+    router.push(`/support?${params.toString()}`);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">사업 관리</h1>
+        <h1 className="text-2xl font-bold text-gray-800">기술지원 관리</h1>
         <Link
-          href="/business/register"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+          href="/support/register"
+          className={role === 'Admin' ? 'bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors' : 'hidden'}
         >
-          사업 등록
+          기술지원 등록
         </Link>
       </div>
 
@@ -153,7 +146,7 @@ export default function BusinessPage() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="사업명으로 검색"
+          placeholder="고객명으로 검색"
           className="px-2 py-1 text-sm border rounded-md"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -180,7 +173,7 @@ export default function BusinessPage() {
         )} */}
       </div>
 
-      {/* 사업 목록 */}
+      {/* 기술지원 목록 */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -189,85 +182,63 @@ export default function BusinessPage() {
                 NO
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                사업명
+                고객
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                사업 담당자 (회사)
+                요청일자
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                고객회사
+                구분
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                사업 상태
+                요청내역
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                제품명
-              </th>
-              {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                노드수
+                담당자
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                코어수
-              </th> */}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                사업 시작일
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                사업 종료일
+                완료여부
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-gray-500 text-sm">
+                <td colSpan={7} className="px-6 py-4 text-center text-gray-500 text-sm">
                   로딩 중...
                 </td>
               </tr>
             ) : (
-              businesses.map((business, index) => (
-                <tr
-                  key={business.id}
-                  className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => router.push(`/business/${business.id}?page=${pagination.currentPage}`)}
-                >
+              supports.map((support, index) => (
+                <tr key={support.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/support/${support.id}?page=${pagination.currentPage}`)}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {pagination.totalItems - ((pagination.currentPage - 1) * pagination.itemsPerPage + index)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate block max-w-[300px]">
-                    {business.name}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {support.customer}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {business.manager_name} ({business.manager_company})
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate block max-w-[200px]">
-                    {business.customer_name}
+                    {support.issued}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {statusMap[business.status] || 'Unknown'}
+                    {support.type === 'consult' ? ('기술상담') : support.type === 'technical' ? ('기술지원') : support.type === 'incident' ? ('장애지원') : support.type === 'poc' ? ('PoC') : support.type === 'other' ? ('기타') : ('Unknown Type')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 whitespace-pre-line">
+                    {support.issue}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {business.product_name} (v{business.product_version})
-                  </td>
-                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {business.node_cnt}
+                    {support.manager}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {business.core_cnt}
-                  </td> */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {business.issued}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {business.expired}
+                    {support.status === 'processing' ? ('처리중') : support.status === 'complete' ? ('완료') : ('Unknown Type')}
                   </td>
                 </tr>
               ))
             )}
-            {!isLoading && businesses.length === 0 && (
+            {!isLoading && supports.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-gray-500 text-sm">
-                  사업 정보가 없습니다.
+                <td colSpan={7} className="px-6 py-4 text-center text-gray-500 text-sm">
+                  기술지원 정보가 없습니다.
                 </td>
               </tr>
             )}
@@ -276,7 +247,7 @@ export default function BusinessPage() {
       </div>
 
       {/* 페이지네이션 */}
-      {businesses.length > 0 && (
+      {supports.length > 0 && (
         <div className="flex justify-center items-center mt-4">
           <div className="flex items-center gap-0">
             <button
@@ -286,13 +257,12 @@ export default function BusinessPage() {
             >
               &lt;
             </button>
-
-            {/* 페이지 버튼 처리 */}
+        
             {(() => {
               const pages = [];
               const total = pagination.totalPages;
               const current = pagination.currentPage;
-
+        
               const createText = (num: number) => {
                 if (num === current) {
                   return (
@@ -316,7 +286,7 @@ export default function BusinessPage() {
                   );
                 }
               };
-
+        
               if (total <= 5) {
                 for (let i = 1; i <= total; i++) {
                   pages.push(createText(i));
@@ -348,18 +318,18 @@ export default function BusinessPage() {
                   );
                 }
               }
-
+        
               return pages;
             })()}
-            
+        
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={!pagination.totalPages}
+              disabled={!hasNextPage}
               className="px-2 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               &gt;
             </button>
-
+        
             <div className="text-sm text-gray-600 ml-4">
               전체 {pagination.totalItems}개 항목
             </div>
