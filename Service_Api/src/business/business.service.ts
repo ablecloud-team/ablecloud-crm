@@ -147,7 +147,10 @@ export class BusinessService {
         p.name AS product_name,
         p.version AS product_version,
         u.username AS manager_name,
-        partner.id AS manager_company_id,
+        CASE
+          WHEN ut.type = 'partner' THEN partner.id
+          ELSE 0
+        END AS manager_company_id,
         CASE
           WHEN ut.type = 'partner' THEN partner.name
           ELSE 'ABLECLOUD'
