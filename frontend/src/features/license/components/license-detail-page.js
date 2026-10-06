@@ -37,9 +37,13 @@ export function LicenseDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
-  const currentRole = getRole();
-  const canApprove = currentRole === "admin" && license?.status === "비활성";
+  const [isAdmin, setIsAdmin] = useState(false);
+  const canApprove = isAdmin && license?.status === "비활성";
   const canDownload = license?.status === "활성";
+
+  useEffect(() => {
+    setIsAdmin(String(getRole() || "user").toLowerCase() === "admin");
+  }, []);
 
   useEffect(() => {
     if (!router.isReady || !id) {
@@ -236,12 +240,12 @@ export function LicenseDetailPage() {
               {isDownloading ? "다운로드 중" : "다운로드"}
             </button>
           ) : null}
-          {getRole() === "admin" ? (
+          {isAdmin ? (
             <Link href={id ? `/licenses/${id}/edit` : "#"} legacyBehavior>
               <a className="action-square-button">수정</a>
             </Link>
           ) : null}
-          {getRole() === "admin" ? (
+          {isAdmin ? (
             <button
               className="action-square-button action-square-button-danger"
               type="button"
