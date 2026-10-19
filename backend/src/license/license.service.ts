@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { createCipheriv, createHash, randomBytes } from "crypto";
+import { createCipheriv, randomBytes, scryptSync } from "crypto";
 import { getEnv } from "../env";
 import { DatabaseService } from "../database/database.service";
 import { UserService } from "../user/user.service";
@@ -97,7 +97,11 @@ export class LicenseService {
       trialLabel: item.trial ? "o" : "-",
       isPermanent: item.expired === "9999-12-31",
       oem: item.oem ? item.oem : "ABLESTACK",
-      issuerCompany: item.company_name || item.customer_name || "-",
+      issuerCompany:
+        item.issuer_company_name ||
+        item.company_name ||
+        item.customer_name ||
+        "-",
       createdAt: item.created || "-",
       approver: item.approved_name || item.approve_user || "-",
       approvedAt: item.approved || "-",
@@ -105,30 +109,48 @@ export class LicenseService {
   }
 
   async downloadLicenseFile(id: string, authContext?: AuthContext) {
-    const license = await this.getLicenseDetail(id, authContext);
+    const whereClause = await this.buildDetailWhereClause(id, authContext);
+    const license = await this.fetchLicenseDetail(whereClause);
 
-    if (license.status !== "활성") {
+    if (!license) {
+      throw new NotFoundException("라이선스 정보를 찾을 수 없습니다.");
+    }
+
+    if (license.status !== "active") {
       throw new BadRequestException("활성화된 라이선스만 다운로드할 수 있습니다.");
     }
 
-    const payload = JSON.stringify({
-      id: license.id,
-      key: license.key,
-      product: license.product,
-      status: license.status,
-      project: license.project,
-      startDate: license.startDate,
-      endDate: license.endDate,
-      issuer: license.issuer,
-      trial: license.trial,
-      oem: license.oem,
-      issuerCompany: license.issuerCompany,
-      createdAt: license.createdAt,
-      approver: license.approver,
-      approvedAt: license.approvedAt,
-    });
-
-    console.log("[license-download] plain payload:", payload);
+    const licenseContent = JSON.stringify(
+      {
+        data: {
+          id: license.id,
+          license_key: license.license_key,
+          issued: license.issued,
+          expired: license.expired,
+          status: license.status,
+          company_id: license.company_id,
+          approve_user: license.approve_user,
+          approved: license.approved,
+          business_id: license.business_id,
+          issued_id: license.issued_id,
+          trial: license.trial,
+          oem: license.oem,
+          created: license.created,
+          company_name: license.company_name || "ABLECLOUD",
+          company_telnum: license.company_telnum,
+          company_level: license.company_level,
+          business_name: license.business_name,
+          product_id: license.product_id,
+          product_name: license.product_name,
+          product_version: license.product_version,
+          issued_name: license.issued_name,
+        },
+      },
+      null,
+      2
+    );
+    const parsedLicense = JSON.parse(licenseContent);
+    const payload = JSON.stringify(parsedLicense.data, null, 2);
 
     return {
       filename: this.generateLicenseKey(),
@@ -148,7 +170,7 @@ export class LicenseService {
     }
 
     const business = await this.fetchBusinessForLicenseCreation(businessId, authContext);
-console.log("[createLicense] fetched business:", business);
+
     if (!business) {
       throw new NotFoundException("라이선스를 생성할 수 있는 사업을 찾지 못했습니다.");
     }
@@ -161,10 +183,12 @@ console.log("[createLicense] fetched business:", business);
       startDate,
     });
     const companyId = Number(business.customer_id);
+    const oem = business.oem || "ABLESTACK";
     const licenseKey = this.generateLicenseKey();
     const escapedLicenseKey = this.databaseService.escapeSqlString(licenseKey);
     const escapedStartDate = this.databaseService.escapeSqlString(startDate);
     const escapedEndDate = this.databaseService.escapeSqlString(endDate);
+    const escapedOem = this.databaseService.escapeSqlString(oem);
     const escapedIssuedId = this.databaseService.escapeSqlString(authContext?.userId || "");
     const status = authContext?.role === "admin" ? "active" : "inactive";
     const escapedStatus = this.databaseService.escapeSqlString(status);
@@ -190,7 +214,7 @@ console.log("[createLicense] fetched business:", business);
         '${escapedStartDate}',
         '${escapedEndDate}',
         ${trialValue},
-        'ABLESTACK',
+        '${escapedOem}',
         ${businessId}
       )
     `;
@@ -432,7 +456,10 @@ console.log("[createLicense] fetched business:", business);
         'product_version', p.version,
         'issued_name', iu.USERNAME,
         'approved_name', au.USERNAME,
-        'company_name', partner.name,
+        'issuer_company_name', COALESCE(NULLIF(issuer_company.name, ''), NULLIF(partner.name, ''), 'ABLECLOUD'),
+        'company_name', COALESCE(NULLIF(issuer_company.name, ''), NULLIF(partner.name, ''), 'ABLECLOUD'),
+        'company_telnum', COALESCE(issuer_company.telnum, partner.telnum),
+        'company_level', partner.level,
         'customer_name', c.name
       ) AS payload
       FROM license l
@@ -442,6 +469,7 @@ console.log("[createLicense] fetched business:", business);
       LEFT JOIN ${env.DB_DATABASE_USER}.USER_ENTITY iu ON l.issued_id = iu.ID
       LEFT JOIN ${env.DB_DATABASE_USER}.USER_ENTITY au
         ON l.approve_user = au.ID OR l.approve_user = au.USERNAME
+      LEFT JOIN customer issuer_company ON l.company_id = issuer_company.id
       LEFT JOIN partner ON l.company_id = partner.id
       LEFT JOIN user_company buc ON b.manager_id = buc.user_id
       ${whereClause}
@@ -468,9 +496,12 @@ console.log("[createLicense] fetched business:", business);
     const query = `
       SELECT JSON_OBJECT(
         'id', b.id,
-        'customer_id', b.customer_id
+        'customer_id', b.customer_id,
+        'oem', pc.name
       ) AS payload
       FROM business b
+      LEFT JOIN product p ON b.product_id = p.id
+      LEFT JOIN product_category pc ON p.category_id = pc.id
       WHERE ${conditions.join(" AND ")}
       LIMIT 1
     `;
@@ -591,7 +622,7 @@ console.log("[createLicense] fetched business:", business);
 
     if (isTrial) {
       const date = new Date(`${startDate}T00:00:00Z`);
-      date.setUTCMonth(date.getUTCMonth() + 1);
+      date.setUTCMonth(date.getUTCMonth() + 3);
       return date.toISOString().slice(0, 10);
     }
 
@@ -627,17 +658,15 @@ console.log("[createLicense] fetched business:", business);
   }
 
   private encryptLicensePayload(payload: string) {
-    const env = getEnv();
-    const iv = randomBytes(12);
-    const key = createHash("sha256").update(env.LICENSE_FILE_SECRET).digest();
-    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const key = scryptSync("password", "salt", 32);
+    const iv = scryptSync("password", "salt", 16);
+    const cipher = createCipheriv("aes-256-cbc", key, iv);
     const encrypted = Buffer.concat([
       cipher.update(payload, "utf8"),
       cipher.final(),
     ]);
-    const authTag = cipher.getAuthTag();
 
-    return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
+    return encrypted.toString("base64");
   }
 
   private mapLicenseStatus(status: string) {
