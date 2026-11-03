@@ -289,9 +289,9 @@ export function LicenseDetailPage() {
             <DetailField label="시작일" value={license.startDate} />
             <DetailField label="만료일" value={license.endDate} />
             <DetailField label="발급자" value={license.issuer} />
+            <DetailField label="발급자 회사" value={license.issuerCompany} />
             <DetailField label="Trial" value={license.trialLabel || 'o'} />
             <DetailField label="oem" value={license.oem} />
-            <DetailField label="발급자 회사" value={license.issuerCompany} />
             <DetailField label="발급일" value={formatDateTime(license.createdAt)} />
             <DetailField label="승인자" value={license.approver} />
             <DetailField label="승인일" value={license.approvedAt && !isNaN(new Date(license.approvedAt)) ? formatDateTime(license.approvedAt) : '-'} />

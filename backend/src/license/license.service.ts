@@ -97,11 +97,7 @@ export class LicenseService {
       trialLabel: item.trial ? "o" : "-",
       isPermanent: item.expired === "9999-12-31",
       oem: item.oem ? item.oem : "ABLESTACK",
-      issuerCompany:
-        item.issuer_company_name ||
-        item.company_name ||
-        item.customer_name ||
-        "-",
+      issuerCompany: item.company_name || "-",
       createdAt: item.created || "-",
       approver: item.approved_name || item.approve_user || "-",
       approvedAt: item.approved || "-",
@@ -435,6 +431,12 @@ export class LicenseService {
         SELECT USER_ID AS user_id, VALUE AS company_id
         FROM ${env.DB_DATABASE_USER}.USER_ATTRIBUTE
         WHERE NAME = 'company_id'
+      ),
+      issued_user_type AS (
+        SELECT USER_ID AS user_id, MAX(VALUE) AS type
+        FROM ${env.DB_DATABASE_USER}.USER_ATTRIBUTE
+        WHERE NAME = 'type'
+        GROUP BY USER_ID
       )
       SELECT JSON_OBJECT(
         'id', l.id,
@@ -456,10 +458,16 @@ export class LicenseService {
         'product_version', p.version,
         'issued_name', iu.USERNAME,
         'approved_name', au.USERNAME,
-        'issuer_company_name', COALESCE(NULLIF(issuer_company.name, ''), NULLIF(partner.name, ''), 'ABLECLOUD'),
-        'company_name', COALESCE(NULLIF(issuer_company.name, ''), NULLIF(partner.name, ''), 'ABLECLOUD'),
-        'company_telnum', COALESCE(issuer_company.telnum, partner.telnum),
-        'company_level', partner.level,
+        'issuer_company_name', CASE
+          WHEN issued_user_type.type = 'vendor' THEN 'ABLECLOUD'
+          ELSE COALESCE(NULLIF(issuer_company.name, ''), 'ABLECLOUD')
+        END,
+        'company_name', CASE
+          WHEN issued_user_type.type = 'vendor' THEN 'ABLECLOUD'
+          ELSE COALESCE(NULLIF(issuer_company.name, ''), 'ABLECLOUD')
+        END,
+        'company_telnum', issuer_company.telnum,
+        'company_level', issuer_company.level,
         'customer_name', c.name
       ) AS payload
       FROM license l
@@ -469,13 +477,13 @@ export class LicenseService {
       LEFT JOIN ${env.DB_DATABASE_USER}.USER_ENTITY iu ON l.issued_id = iu.ID
       LEFT JOIN ${env.DB_DATABASE_USER}.USER_ENTITY au
         ON l.approve_user = au.ID OR l.approve_user = au.USERNAME
-      LEFT JOIN customer issuer_company ON l.company_id = issuer_company.id
-      LEFT JOIN partner ON l.company_id = partner.id
+      LEFT JOIN issued_user_type ON l.issued_id = issued_user_type.user_id
       LEFT JOIN user_company buc ON b.manager_id = buc.user_id
+      LEFT JOIN partner issuer_company ON buc.company_id = issuer_company.id
       ${whereClause}
       LIMIT 1
     `;
-    const output = await this.databaseService.runMysqlQuery(query);
+    const output = await this.databaseService.runMysqlQuery(query, env.DB_DATABASE);
 
     return output ? JSON.parse(output) : null;
   }
